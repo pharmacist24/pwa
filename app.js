@@ -200,7 +200,7 @@ async function submitNewPatient(e) {
 
     const formData = getFormData();
 
-    // VALIDATION (UPDATED - Pharmacist ID now required)
+// VALIDATION
     if(!formData.dosing) { showToast('error', 'Please select a dosing amount'); return; }
     if(!formData.sensitivityTest) { showToast('error', 'Please select Sensitivity Test result'); return; }
     if(formData.totalAmount === 0) { showToast('error', 'Please add vials'); return; }
@@ -326,14 +326,13 @@ async function syncRecord(record) {
             sensitivityTest: record.sensitivityTest,
             frequency: record.frequency,
             duration: record.duration,
-            pharmacistId: record.pharmacistId || '',  // Now required field, but still has fallback
-            meropenem1gQuantity: record.meropenem1gQuantity,  // Current total (includes daily updates)
-            meropenem0_5gQuantity: record.meropenem0_5gQuantity,  // Current total (includes daily updates)
+            pharmacistId: record.pharmacistId || '',
+            meropenem1gQuantity: record.meropenem1gQuantity,
+            meropenem0_5gQuantity: record.meropenem0_5gQuantity,
             syncStatus: 'Synced',
         };
 
         console.log('[Pro] Syncing record:', record.id, 'hash:', record.submissionHash, 'for patient:', record.patientName);
-        console.log('[Pro] Payload sent:', payload);
 
         await fetch(GOOGLE_APPS_SCRIPT_URL, {
             method: 'POST',
@@ -384,7 +383,7 @@ async function syncAllRecords() {
     renderPatientsList();
 }
 
-// ===== DAILY UPDATE (ENHANCED UI WITH SYNC) =====
+// ===== DAILY UPDATE (ENHANCED UI) =====
 function openDailyUpdateModal(recordId) {
     const record = records.find(r => r.id === recordId);
     if (!record) return;
@@ -467,31 +466,21 @@ async function saveDailyUpdate() {
             totalAmount: newTotal,
             meropenem1gQuantity: record.meropenem1gQuantity + meropenem1gQuantity,
             meropenem0_5gQuantity: record.meropenem0_5gQuantity + meropenem0_5gQuantity,
-            synced: false // Keep synced = false until sync is successful
+            synced: false // Keep synced = false
         });
 
         console.log('[Pro] Daily update saved for patient:', record.patientName, 'Day:', newDay);
-        console.log('[Pro] New totals:', {
-            '1g Vials': record.meropenem1gQuantity + meropenem1gQuantity,
-            '0.5g Vials': record.meropenem0_5gQuantity + meropenem0_5gQuantity,
-            'Total': newTotal
-        });
-
         showToast('success', `Daily Update Saved - Day ${newDay}`);
+        closeDailyUpdateModal();
+
+        // Get the UPDATED record from database before syncing
+        const updatedRecord = records.find(r => r.id === currentPatientId);
 
         // Sync to Google Sheets with updated totals
-        if (navigator.onLine) {
+        if (navigator.onLine && updatedRecord) {
             try {
-                // Get the updated record with new totals
-                const updatedRecord = records.find(r => r.id === currentPatientId);
-                if (updatedRecord) {
-                    await syncRecord(updatedRecord);
-                    showToast('info', 'Updated totals synced to Google Sheets');
-                    console.log('[Pro] Synced updated totals to Google Sheets:', {
-                        '1g Vials': updatedRecord.meropenem1gQuantity,
-                        '0.5g Vials': updatedRecord.meropenem0_5gQuantity
-                    });
-                }
+                await syncRecord(updatedRecord);
+                showToast('info', 'Updated totals synced to Google Sheets');
             } catch (syncErr) {
                 console.error("Sync failed after daily update", syncErr);
                 showToast('warning', 'Daily update saved (sync pending)');
@@ -499,8 +488,6 @@ async function saveDailyUpdate() {
         } else {
             showToast('warning', 'Daily update saved (sync pending)');
         }
-
-        closeDailyUpdateModal();
 
         // Refresh views
         if (document.getElementById('patientDetailPage').classList.contains('active')) {
@@ -527,21 +514,20 @@ async function dischargePatient(recordId) {
     try {
         await updateRecord(recordId, {
             status: 'Discharged',
-            dischargeDate: new Date().toISOString()
+            dischargeDate: new Date().toISOString(),
+            synced: false // Mark as needing sync
         });
 
         showToast('success', 'Patient Discharged Successfully');
 
+        // Get the UPDATED record from database before syncing
+        const updatedRecord = records.find(r => r.id === recordId);
+
         // Sync final totals to Google Sheets
-        if (navigator.onLine) {
+        if (navigator.onLine && updatedRecord) {
             try {
-                await syncRecord({ ...record, id: recordId });
+                await syncRecord(updatedRecord);
                 showToast('info', 'Final totals synced to Google Sheets');
-                console.log('[Pro] Final totals synced to Google Sheets:', {
-                    '1g Vials': record.meropenem1gQuantity,
-                    '0.5g Vials': record.meropenem0_5gQuantity,
-                    'Total': record.totalAmount
-                });
             } catch (syncErr) {
                 console.error("Sync failed after discharge", syncErr);
                 showToast('warning', 'Patient discharged (sync pending)');
@@ -943,8 +929,7 @@ function showToast(type, msg) {
     const icons = {
         success: 'fa-check',
         error: 'fa-times',
-        info: 'fa-info',
-        warning: 'fa-exclamation-triangle'
+        info: 'fa-info'
     };
 
     toast.innerHTML = `
@@ -1005,6 +990,35 @@ function exportToCSV() {
     a.click();
 }
 
+// ===== DUPLICATE DETECTION =====
+function detectDuplicates() {
+    const duplicates = [];
+    const seen = new Map();
+
+    records.forEach(record => {
+        const key = `${record.patientName}_${record.age}_${record.diagnosis}`;
+        const timestamp = new Date(record.createdAt).getTime();
+
+        if (seen.has(key)) {
+            const existing = seen.get(key);
+            const existingTimestamp = new Date(existing.createdAt).getTime();
+
+            if (Math.abs(timestamp - existingTimestamp) < 1000) {
+                duplicates.push({ existing, duplicate: record });
+            }
+        } else {
+            seen.set(key, record);
+        }
+    });
+
+    if (duplicates.length > 0) {
+        console.warn('[Pro] Detected', duplicates.length, 'potential duplicate records:', duplicates);
+        showToast('info', `Detected ${duplicates.length} potential duplicate records. Check console for details.`);
+    }
+
+    return duplicates;
+}
+
 // ===== INITIALIZATION =====
 async function initApp() {
     try {
@@ -1013,6 +1027,9 @@ async function initApp() {
         console.log('[Pro] Database initialized');
         await loadRecords();
         console.log('[Pro] Records loaded');
+
+        // Check for duplicates
+        detectDuplicates();
 
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('app').style.display = 'block';
@@ -1048,6 +1065,9 @@ window.deletePatient = deletePatient;
 window.syncAllRecords = syncAllRecords;
 window.exportToCSV = exportToCSV;
 window.updateTotalDisplay = updateTotalDisplay;
+window.detectDuplicates = detectDuplicates;
+window.showProcessingOverlay = showProcessingOverlay;
+window.hideProcessingOverlay = hideProcessingOverlay;
 
 // ===== START APP =====
 if (document.readyState === 'loading') {
