@@ -1,12 +1,13 @@
-// Meropenem Tracker Pro Service Worker
+// Meropenem Tracking System Service Worker
 // Caches HTML, CSS, JS, and FontAwesome CDN for offline support
 
-const CACHE_NAME = 'meropenem-tracker-pro-v1';
+const CACHE_NAME = 'meropenem-tracker-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/app.js',
   '/manifest.json',
+  '/logo.svg',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2'
 ];
@@ -57,16 +58,22 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request)
       .then((cachedResponse) => {
         if (cachedResponse) {
+          // Return cached version
           return cachedResponse;
         }
 
+        // Not in cache, fetch from network
         return fetch(event.request)
           .then((response) => {
+            // Check if valid response
             if (!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
 
+            // Clone response
             const responseToCache = response.clone();
+
+            // Cache the fetched response for future use
             caches.open(CACHE_NAME)
               .then((cache) => {
                 cache.put(event.request, responseToCache);
@@ -76,6 +83,7 @@ self.addEventListener('fetch', (event) => {
           })
           .catch((error) => {
             console.error('[Service Worker] Fetch failed:', error);
+            // Return a custom offline page for HTML requests
             if (event.request.headers.get('accept')?.includes('text/html')) {
               return caches.match('/index.html');
             }
@@ -84,12 +92,14 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Sync event - for background sync
+// Sync event - for background sync (optional enhancement)
 self.addEventListener('sync', (event) => {
   console.log('[Service Worker] Background sync triggered:', event.tag);
+  // Can be used for syncing pending records in the future
 });
 
-// Push event - for push notifications
+// Push event - for push notifications (optional enhancement)
 self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received');
+  // Can be used for notifications in the future
 });
