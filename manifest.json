@@ -1,0 +1,21 @@
+{
+  "name": "Meropenem Tracker Pro",
+  "short_name": "Meropenem Pro",
+  "description": "Track and manage Meropenem dispensing for Baghdad Teaching Hospital",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0f0f23",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/sprites/solid.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "healthcare", "productivity"],
+  "scope": "/",
+  "lang": "en"
+}
