@@ -156,7 +156,6 @@ function getFormData() {
         dosing: document.getElementById('dosing').value,
         sensitivityTest: document.getElementById('sensitivityTest').value,
         frequency: document.getElementById('frequency').value,
-        duration: parseInt(document.getElementById('duration').value) || 0,
         pharmacistId: document.getElementById('pharmacistId').value.trim(),
         meropenem1gQuantity: m1g,
         meropenem0_5gQuantity: m05g,
@@ -240,13 +239,15 @@ async function submitNewPatient(e) {
     showProcessingOverlay();
 
     try {
-        // 1. Add to Local DB (Status: pending) with Hospital Admission Tracking (UNCHANGED)
+        // 1. Add to Local DB (Status: pending) with Hospital Admission Tracking
         const submissionTimestamp = new Date().toISOString();
         const newRecord = await addRecord({
             ...formData,
             createdAt: submissionTimestamp,
             synced: false,
             syncedAt: null,
+            // Duration is calculated automatically - starts at 1 day
+            duration: 1,
             // Hospital Admission Tracking
             startDate: submissionTimestamp,
             status: "Admitted",
@@ -259,18 +260,8 @@ async function submitNewPatient(e) {
 
         console.log('[Pro] Record saved with ID:', newRecord.id, 'submissionId:', newRecord.submissionId, 'hash:', submissionHash);
 
-        // 2. Sync Logic (UNCHANGED)
-        if (navigator.onLine) {
-            try {
-                await syncRecord(newRecord);
-                showToast('success', 'Record Saved & Synced Successfully');
-            } catch (syncErr) {
-                console.error("Sync failed", syncErr);
-                showToast('info', 'Record Saved Locally (Pending Sync)');
-            }
-        } else {
-            showToast('info', 'Saved Locally (No Internet)');
-        }
+        // Data will be synced to Google Sheets only when patient is discharged
+        showToast('success', 'Record Saved Locally - Will sync on discharge');
 
         // 3. Update UI
         updatePendingBanner();
@@ -333,6 +324,7 @@ async function syncRecord(record) {
         };
 
         console.log('[Pro] Syncing record:', record.id, 'hash:', record.submissionHash, 'for patient:', record.patientName);
+        console.log('[Pro] SYNCING PAYLOAD - Duration:', payload.duration, 'days, 1g vials:', payload.meropenem1gQuantity, '0.5g vials:', payload.meropenem0_5gQuantity, 'Total grams:', (payload.meropenem1gQuantity + payload.meropenem0_5gQuantity * 0.5).toFixed(1));
 
         await fetch(GOOGLE_APPS_SCRIPT_URL, {
             method: 'POST',
@@ -460,34 +452,24 @@ async function saveDailyUpdate() {
     const newTotal = record.totalAmount + meropenem1gQuantity + (meropenem0_5gQuantity * 0.5);
 
     try {
-        await updateRecord(currentPatientId, {
+        // Capture the returned updated record directly from updateRecord
+        const updatedRecord = await updateRecord(currentPatientId, {
             currentHospitalDay: newDay,
+            duration: newDay, // Duration automatically increases with each daily update
             dailyUpdates: [...(record.dailyUpdates || []), newDailyUpdate],
             totalAmount: newTotal,
             meropenem1gQuantity: record.meropenem1gQuantity + meropenem1gQuantity,
             meropenem0_5gQuantity: record.meropenem0_5gQuantity + meropenem0_5gQuantity,
-            synced: false // Keep synced = false
+            synced: false
         });
 
         console.log('[Pro] Daily update saved for patient:', record.patientName, 'Day:', newDay);
+        console.log('[Pro] Updated totals - 1g:', updatedRecord.meropenem1gQuantity, '0.5g:', updatedRecord.meropenem0_5gQuantity, 'Total:', updatedRecord.totalAmount);
         showToast('success', `Daily Update Saved - Day ${newDay}`);
         closeDailyUpdateModal();
 
-        // Get the UPDATED record from database before syncing
-        const updatedRecord = records.find(r => r.id === currentPatientId);
-
-        // Sync to Google Sheets with updated totals
-        if (navigator.onLine && updatedRecord) {
-            try {
-                await syncRecord(updatedRecord);
-                showToast('info', 'Updated totals synced to Google Sheets');
-            } catch (syncErr) {
-                console.error("Sync failed after daily update", syncErr);
-                showToast('warning', 'Daily update saved (sync pending)');
-            }
-        } else {
-            showToast('warning', 'Daily update saved (sync pending)');
-        }
+        // Data will be synced to Google Sheets when patient is discharged
+        console.log('[Pro] Data will sync to Google Sheets on discharge');
 
         // Refresh views
         if (document.getElementById('patientDetailPage').classList.contains('active')) {
@@ -512,19 +494,24 @@ async function dischargePatient(recordId) {
     if (!confirm(`Discharge patient ${record.patientName}?`)) return;
 
     try {
-        await updateRecord(recordId, {
+        // Capture the returned updated record directly from updateRecord
+        const updatedRecord = await updateRecord(recordId, {
             status: 'Discharged',
             dischargeDate: new Date().toISOString(),
-            synced: false // Mark as needing sync
+            duration: record.currentHospitalDay, // Duration = total days in hospital
+            synced: false
         });
 
+        console.log('[Pro] Patient discharged:', updatedRecord.patientName, 'Duration:', updatedRecord.duration, 'days', 'Syncing final totals - 1g:', updatedRecord.meropenem1gQuantity, '0.5g:', updatedRecord.meropenem0_5gQuantity, 'Total:', updatedRecord.totalAmount);
         showToast('success', 'Patient Discharged Successfully');
 
-        // Get the UPDATED record from database before syncing
-        const updatedRecord = records.find(r => r.id === recordId);
+        // Remove from synced hashes to allow resync with updated status
+        if (updatedRecord && updatedRecord.submissionHash) {
+            syncedHashes.delete(updatedRecord.submissionHash);
+        }
 
-        // Sync final totals to Google Sheets
-        if (navigator.onLine && updatedRecord) {
+        // Sync final totals to Google Sheets (using the returned updatedRecord from DB)
+        if (navigator.onLine) {
             try {
                 await syncRecord(updatedRecord);
                 showToast('info', 'Final totals synced to Google Sheets');
@@ -813,7 +800,7 @@ function renderPatientDetail(recordId) {
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: var(--spacing-xs);">Duration</div>
-                    <div style="font-weight: 600;">${record.duration} days</div>
+                    <div style="font-weight: 600;">${record.duration} days <span style="font-size: 0.7rem; color: var(--text-muted);">(auto-calculated)</span></div>
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: var(--spacing-xs);">Admitted</div>
@@ -1050,6 +1037,211 @@ async function initApp() {
     }
 }
 
+// ===== eGFR CALCULATOR (Three Methods) =====
+
+// Method selection function
+function selectMethod(method) {
+    // Update UI
+    document.querySelectorAll('.method-option').forEach(option => {
+        option.classList.remove('active');
+    });
+    document.querySelector(`[data-method="${method}"]`).classList.add('active');
+
+    // Update hidden input
+    document.getElementById('eGFR_Method').value = method;
+
+    // Show/hide weight field based on method
+    const weightField = document.getElementById('weightField');
+    const raceField = document.getElementById('raceField');
+
+    if (method === 'cockcroft') {
+        weightField.style.display = 'block';
+        raceField.style.display = 'none';
+    } else {
+        weightField.style.display = 'none';
+        raceField.style.display = 'block';
+    }
+
+    // Hide result when method changes
+    document.getElementById('eGFR_Result').style.display = 'none';
+
+    console.log('[eGFR] Method selected:', method);
+}
+
+// CKD-EPI Formula
+function calculateCKDEPI(creatinine, age, gender, isBlack) {
+    let egfr = 0;
+
+    if (gender === 'female') {
+        if (creatinine <= 0.7) {
+            egfr = 141 * Math.pow(creatinine / 0.7, -0.329) * Math.pow(0.993, age);
+        } else {
+            egfr = 141 * Math.pow(creatinine / 0.7, -1.209) * Math.pow(0.993, age);
+        }
+        if (isBlack) {
+            egfr *= 1.018;
+        }
+    } else { // male
+        if (creatinine <= 0.9) {
+            egfr = 141 * Math.pow(creatinine / 0.9, -0.411) * Math.pow(0.993, age);
+        } else {
+            egfr = 141 * Math.pow(creatinine / 0.9, -1.209) * Math.pow(0.993, age);
+        }
+        if (isBlack) {
+            egfr *= 1.159;
+        }
+    }
+
+    return egfr;
+}
+
+// MDRD Formula (4-variable)
+function calculateMDRD(creatinine, age, gender, isBlack) {
+    let egfr = 175 * Math.pow(creatinine, -1.154) * Math.pow(age, -0.203);
+
+    if (gender === 'female') {
+        egfr *= 0.742;
+    }
+
+    if (isBlack) {
+        egfr *= 1.212;
+    }
+
+    return egfr;
+}
+
+// Cockcroft-Gault Formula (for Creatinine Clearance)
+function calculateCockcroftGault(creatinine, age, gender, weight) {
+    let crcl = 0;
+
+    // Convert to mL/min
+    if (gender === 'female') {
+        crcl = ((140 - age) * weight) / (72 * creatinine) * 0.85;
+    } else { // male
+        crcl = ((140 - age) * weight) / (72 * creatinine);
+    }
+
+    // Convert to mL/min/1.73m² (using average body surface area of 1.73 m²)
+    // First calculate body surface area using Mosteller formula
+    const height = 1.7; // Using average height in meters (can be made configurable)
+    const bsa = Math.sqrt(height * weight) / 6;
+    const adjustedCrcl = (crcl / bsa) * 1.73;
+
+    return adjustedCrcl;
+}
+
+// Main calculation function
+function calculateEGFR() {
+    const method = document.getElementById('eGFR_Method').value;
+    const creatinine = parseFloat(document.getElementById('eGFR_Creatinine').value);
+    const age = parseInt(document.getElementById('eGFR_Age').value);
+    const gender = document.getElementById('eGFR_Gender').value;
+
+    // Validation
+    if (!creatinine || !age || !gender) {
+        showToast('error', 'Please fill in all required fields');
+        return;
+    }
+
+    if (creatinine <= 0 || creatinine > 20) {
+        showToast('error', 'Invalid creatinine value (0.1 - 20 mg/dL)');
+        return;
+    }
+
+    let egfr = 0;
+    let isBlack = false;
+    let weight = 0;
+
+    // Get race for CKD-EPI and MDRD
+    if (method !== 'cockcroft') {
+        const race = document.getElementById('eGFR_Race').value;
+        if (!race) {
+            showToast('error', 'Please select race');
+            return;
+        }
+        isBlack = (race === 'black');
+    }
+
+    // Get weight for Cockcroft-Gault
+    if (method === 'cockcroft') {
+        weight = parseFloat(document.getElementById('eGFR_Weight').value);
+        if (!weight || weight <= 0) {
+            showToast('error', 'Please enter valid weight');
+            return;
+        }
+    }
+
+    // Calculate based on selected method
+    switch(method) {
+        case 'ckdepi':
+            egfr = calculateCKDEPI(creatinine, age, gender, isBlack);
+            break;
+        case 'mDRD':
+            egfr = calculateMDRD(creatinine, age, gender, isBlack);
+            break;
+        case 'cockcroft':
+            egfr = calculateCockcroftGault(creatinine, age, gender, weight);
+            break;
+        default:
+            egfr = calculateCKDEPI(creatinine, age, gender, isBlack);
+    }
+
+    // Round to 1 decimal place
+    egfr = Math.round(egfr * 10) / 10;
+
+    // Determine CKD category
+    let category = '';
+    let color = '';
+
+    if (egfr >= 90) {
+        category = 'Normal or mild CKD';
+        color = '#10b981';
+    } else if (egfr >= 60) {
+        category = 'Mildly decreased (Stage 2)';
+        color = '#3b82f6';
+    } else if (egfr >= 45) {
+        category = 'Mild to moderately decreased (Stage 3a)';
+        color = '#f59e0b';
+    } else if (egfr >= 30) {
+        category = 'Moderately to severely decreased (Stage 3b)';
+        color = '#ef4444';
+    } else if (egfr >= 15) {
+        category = 'Severely decreased (Stage 4)';
+        color = '#dc2626';
+    } else {
+        category = 'Kidney failure (Stage 5)';
+        color = '#991b1b';
+    }
+
+    // Get method name for display
+    const methodNames = {
+        'ckdepi': 'CKD-EPI',
+        'mDRD': 'MDRD',
+        'cockcroft': 'Cockcroft-Gault'
+    };
+
+    // Display result
+    const resultDiv = document.getElementById('eGFR_Result');
+    const valueDiv = document.getElementById('eGFR_Value');
+    const categoryDiv = document.getElementById('eGFR_Category');
+
+    valueDiv.textContent = egfr.toFixed(1);
+    categoryDiv.innerHTML = `
+        <span style="color: ${color};">●</span> ${category}
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            Calculated using ${methodNames[method]} formula
+        </div>
+    `;
+
+    resultDiv.style.display = 'block';
+
+    // Smooth scroll to result
+    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    console.log('[eGFR] Calculation complete - Method:', methodNames[method], 'eGFR:', egfr, 'Category:', category);
+    showToast('success', `eGFR calculated using ${methodNames[method]} formula`);
+}
+
 // ===== EXPOSE FUNCTIONS =====
 window.showPage = showPage;
 window.submitNewPatient = submitNewPatient;
@@ -1060,6 +1252,8 @@ window.openDailyUpdateModal = openDailyUpdateModal;
 window.closeDailyUpdateModal = closeDailyUpdateModal;
 window.saveDailyUpdate = saveDailyUpdate;
 window.calculateNewTotal = calculateNewTotal;
+window.calculateEGFR = calculateEGFR;
+window.selectMethod = selectMethod;
 window.dischargePatient = dischargePatient;
 window.deletePatient = deletePatient;
 window.syncAllRecords = syncAllRecords;
