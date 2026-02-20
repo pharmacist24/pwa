@@ -1174,6 +1174,73 @@
         .mb-4 { margin-bottom: var(--spacing-md); }
         .w-full { width: 100%; }
         .hidden { display: none !important; }
+
+        /* ===== METHOD SLIDER ===== */
+        .method-slider {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-sm);
+        }
+
+        .method-option {
+            background: var(--bg-tertiary);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            cursor: pointer;
+            transition: all var(--transition-base);
+            text-align: center;
+        }
+
+        .method-option:hover {
+            background: var(--bg-secondary);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .method-option.active {
+            background: var(--gradient-card);
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .method-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            background: var(--bg-glass);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--spacing-sm);
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            transition: all var(--transition-base);
+        }
+
+        .method-option.active .method-icon {
+            background: var(--gradient-primary);
+            color: white;
+        }
+
+        .method-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .method-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            line-height: 1.3;
+        }
+
+        @media (max-width: 768px) {
+            .method-slider {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1212,11 +1279,11 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button class="header-btn" onclick="syncAllRecords()" title="Sync Records">
+                    <button class="header-btn" onclick="syncAllRecords()" title="Sync Discharged Patients">
                         <i class="fas fa-sync-alt"></i>
                     </button>
-                    <button class="header-btn" onclick="showPage('settings')" title="Settings">
-                        <i class="fas fa-cog"></i>
+                    <button class="header-btn" onclick="showPage('settings')" title="eGFR Calculator">
+                        <i class="fas fa-kidneys"></i>
                     </button>
                 </div>
             </div>
@@ -1387,11 +1454,6 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label required">Duration (Days)</label>
-                            <input type="number" id="duration" class="form-input" required min="1" placeholder="e.g. 7">
-                        </div>
-
-                        <div class="form-group">
                             <label class="form-label required" style="color: var(--danger);">Sensitivity Test / Culture</label>
                             <select id="sensitivityTest" class="form-select" required style="border-color: rgba(239, 68, 68, 0.5);">
                                 <option value="">Select Result</option>
@@ -1473,28 +1535,202 @@
             </div>
         </div>
 
-        <!-- Settings Page -->
+        <!-- eGFR Calculator Page -->
         <div id="settingsPage" class="page">
             <div class="content">
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
+                            <i class="fas fa-kidneys"></i>
+                            eGFR Calculator
+                        </div>
+                    </div>
+
+                    <!-- Method Slider -->
+                    <div class="form-group" style="margin-bottom: var(--spacing-lg);">
+                        <label class="form-label required">Calculation Method</label>
+                        <div class="method-slider" id="methodSlider">
+                            <div class="method-option active" data-method="ckdepi" onclick="selectMethod('ckdepi')">
+                                <div class="method-icon"><i class="fas fa-flask"></i></div>
+                                <div class="method-name">CKD-EPI</div>
+                                <div class="method-desc">Most accurate for most patients</div>
+                            </div>
+                            <div class="method-option" data-method="mDRD" onclick="selectMethod('mDRD')">
+                                <div class="method-icon"><i class="fas fa-chart-line"></i></div>
+                                <div class="method-name">MDRD</div>
+                                <div class="method-desc">Widely used clinical formula</div>
+                            </div>
+                            <div class="method-option" data-method="cockcroft" onclick="selectMethod('cockcroft')">
+                                <div class="method-icon"><i class="fas fa-balance-scale"></i></div>
+                                <div class="method-name">Cockcroft-Gault</div>
+                                <div class="method-desc">For drug dosing adjustments</div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="eGFR_Method" value="ckdepi">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label required">Serum Creatinine (mg/dL)</label>
+                        <input type="number" id="eGFR_Creatinine" class="form-input" required step="0.01" min="0.1" placeholder="e.g. 1.2">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label required">Age (years)</label>
+                        <input type="number" id="eGFR_Age" class="form-input" required min="1" max="120" placeholder="e.g. 45">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label required">Gender</label>
+                        <select id="eGFR_Gender" class="form-select" required>
+                            <option value="">Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="raceField">
+                        <label class="form-label required">Race</label>
+                        <select id="eGFR_Race" class="form-select" required>
+                            <option value="">Select Race</option>
+                            <option value="white">White</option>
+                            <option value="black">Black/African American</option>
+                            <option value="asian">Asian</option>
+                            <option value="hispanic">Hispanic/Latino</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="weightField" style="display: none;">
+                        <label class="form-label required">Weight (kg)</label>
+                        <input type="number" id="eGFR_Weight" class="form-input" required step="0.1" min="1" max="300" placeholder="e.g. 70">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--spacing-xs);">
+                            <i class="fas fa-info-circle"></i> Required for Cockcroft-Gault formula
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary btn-full" onclick="calculateEGFR()">
+                        <i class="fas fa-calculator"></i>
+                        Calculate eGFR
+                    </button>
+
+                    <div id="eGFR_Result" style="margin-top: var(--spacing-lg); display: none;">
+                        <div class="card" style="background: var(--gradient-card); border: 1px solid rgba(99, 102, 241, 0.3);">
+                            <div style="text-align: center; padding: var(--spacing-lg);">
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--spacing-sm);">Estimated Glomerular Filtration Rate</div>
+                                <div id="eGFR_Value" style="font-size: 2.5rem; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: var(--spacing-sm) 0;">
+                                    --
+                                </div>
+                                <div style="font-size: 0.9rem; color: var(--text-secondary);">mL/min/1.73m²</div>
+                                <div id="eGFR_Category" style="margin-top: var(--spacing-md); font-weight: 600;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-info-circle"></i>
+                            eGFR Categories (CKD Stages)
+                        </div>
+                    </div>
+                    <div style="display: grid; gap: var(--spacing-sm);">
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="width: 12px; height: 12px; background: #10b981; border-radius: 50%;"></div>
+                            <div>
+                                <div style="font-weight: 600;">≥ 90</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Normal or mild CKD</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="width: 12px; height: 12px; background: #3b82f6; border-radius: 50%;"></div>
+                            <div>
+                                <div style="font-weight: 600;">60-89</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Mildly decreased</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="width: 12px; height: 12px; background: #f59e0b; border-radius: 50%;"></div>
+                            <div>
+                                <div style="font-weight: 600;">45-59</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Mild to moderately decreased</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%;"></div>
+                            <div>
+                                <div style="font-weight: 600;">30-44</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Moderately to severely decreased</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="width: 12px; height: 12px; background: #dc2626; border-radius: 50%;"></div>
+                            <div>
+                                <div style="font-weight: 600;">15-29</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Severely decreased</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="width: 12px; height: 12px; background: #991b1b; border-radius: 50%;"></div>
+                            <div>
+                                <div style="font-weight: 600;">< 15</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Kidney failure</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-graduation-cap"></i>
+                            Calculation Methods Explained
+                        </div>
+                    </div>
+                    <div style="display: grid; gap: var(--spacing-md);">
+                        <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border-left: 3px solid var(--primary);">
+                            <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">CKD-EPI (Recommended)</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Most accurate for estimating GFR in adults. Preferred by KDIGO for CKD staging.
+                            </div>
+                        </div>
+                        <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border-left: 3px solid var(--secondary);">
+                            <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">MDRD</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Widely used clinical formula. May underestimate GFR in healthy individuals.
+                            </div>
+                        </div>
+                        <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border-left: 3px solid var(--success);">
+                            <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">Cockcroft-Gault</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Estimates creatinine clearance. Used for drug dosing adjustments (e.g., antibiotics).
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
                             <i class="fas fa-cog"></i>
-                            Settings
+                            App Settings
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Sync Status</label>
                         <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md);">
-                            <span>Unsynced Records</span>
+                            <span>Patients Waiting for Discharge</span>
                             <span class="badge badge-warning" id="pendingRecordsCount">0</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--spacing-sm);">
+                            <i class="fas fa-info-circle"></i> Data syncs to Google Sheets when patient is discharged
                         </div>
                     </div>
 
                     <button class="btn btn-primary btn-full" onclick="syncAllRecords()">
                         <i class="fas fa-sync-alt"></i>
-                        Sync All Records
+                        Sync Discharged Patients
                     </button>
 
                     <div style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255, 255, 255, 0.1);">
@@ -1503,15 +1739,6 @@
                             <i class="fas fa-download"></i>
                             Export to CSV
                         </button>
-                    </div>
-
-                    <div style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255, 255, 255, 0.1);">
-                        <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: var(--spacing-md);">About</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">
-                            Meropenem Tracker Pro v2.0<br>
-                            Baghdad Teaching Hospital<br>
-                            © 2024
-                        </p>
                     </div>
                 </div>
             </div>
@@ -1541,9 +1768,9 @@
             </div>
             <div class="nav-item" onclick="showPage('settings')" data-page="settings">
                 <div class="nav-icon">
-                    <i class="fas fa-cog"></i>
+                    <i class="fas fa-kidneys"></i>
                 </div>
-                <span class="nav-label">Settings</span>
+                <span class="nav-label">eGFR</span>
             </div>
         </div>
     </nav>
