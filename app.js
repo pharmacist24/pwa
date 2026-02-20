@@ -200,10 +200,11 @@ async function submitNewPatient(e) {
 
     const formData = getFormData();
 
-    // VALIDATION
+    // VALIDATION (UPDATED - Pharmacist ID now required)
     if(!formData.dosing) { showToast('error', 'Please select a dosing amount'); return; }
     if(!formData.sensitivityTest) { showToast('error', 'Please select Sensitivity Test result'); return; }
     if(formData.totalAmount === 0) { showToast('error', 'Please add vials'); return; }
+    if(!formData.pharmacistId) { showToast('error', 'Please enter Pharmacist ID'); return; }
 
     // CREATE UNIQUE HASH FOR THIS SUBMISSION
     const submissionHash = `${formData.patientName}_${formData.age}_${formData.gender}_${formData.diagnosis}_${formData.dosing}_${formData.frequency}_${formData.duration}_${formData.meropenem1gQuantity}_${formData.meropenem0_5gQuantity}`;
@@ -325,13 +326,14 @@ async function syncRecord(record) {
             sensitivityTest: record.sensitivityTest,
             frequency: record.frequency,
             duration: record.duration,
-            pharmacistId: record.pharmacistId || '',
-            meropenem1gQuantity: record.meropenem1gQuantity,
-            meropenem0_5gQuantity: record.meropenem0_5gQuantity,
+            pharmacistId: record.pharmacistId || '',  // Now required field, but still has fallback
+            meropenem1gQuantity: record.meropenem1gQuantity,  // Current total (includes daily updates)
+            meropenem0_5gQuantity: record.meropenem0_5gQuantity,  // Current total (includes daily updates)
             syncStatus: 'Synced',
         };
 
         console.log('[Pro] Syncing record:', record.id, 'hash:', record.submissionHash, 'for patient:', record.patientName);
+        console.log('[Pro] Payload sent:', payload);
 
         await fetch(GOOGLE_APPS_SCRIPT_URL, {
             method: 'POST',
@@ -382,7 +384,7 @@ async function syncAllRecords() {
     renderPatientsList();
 }
 
-// ===== DAILY UPDATE (ENHANCED UI) =====
+// ===== DAILY UPDATE (ENHANCED UI WITH SYNC) =====
 function openDailyUpdateModal(recordId) {
     const record = records.find(r => r.id === recordId);
     if (!record) return;
@@ -465,11 +467,39 @@ async function saveDailyUpdate() {
             totalAmount: newTotal,
             meropenem1gQuantity: record.meropenem1gQuantity + meropenem1gQuantity,
             meropenem0_5gQuantity: record.meropenem0_5gQuantity + meropenem0_5gQuantity,
-            synced: false // Keep synced = false
+            synced: false // Keep synced = false until sync is successful
         });
 
         console.log('[Pro] Daily update saved for patient:', record.patientName, 'Day:', newDay);
+        console.log('[Pro] New totals:', {
+            '1g Vials': record.meropenem1gQuantity + meropenem1gQuantity,
+            '0.5g Vials': record.meropenem0_5gQuantity + meropenem0_5gQuantity,
+            'Total': newTotal
+        });
+
         showToast('success', `Daily Update Saved - Day ${newDay}`);
+
+        // Sync to Google Sheets with updated totals
+        if (navigator.onLine) {
+            try {
+                // Get the updated record with new totals
+                const updatedRecord = records.find(r => r.id === currentPatientId);
+                if (updatedRecord) {
+                    await syncRecord(updatedRecord);
+                    showToast('info', 'Updated totals synced to Google Sheets');
+                    console.log('[Pro] Synced updated totals to Google Sheets:', {
+                        '1g Vials': updatedRecord.meropenem1gQuantity,
+                        '0.5g Vials': updatedRecord.meropenem0_5gQuantity
+                    });
+                }
+            } catch (syncErr) {
+                console.error("Sync failed after daily update", syncErr);
+                showToast('warning', 'Daily update saved (sync pending)');
+            }
+        } else {
+            showToast('warning', 'Daily update saved (sync pending)');
+        }
+
         closeDailyUpdateModal();
 
         // Refresh views
@@ -502,15 +532,22 @@ async function dischargePatient(recordId) {
 
         showToast('success', 'Patient Discharged Successfully');
 
+        // Sync final totals to Google Sheets
         if (navigator.onLine) {
             try {
                 await syncRecord({ ...record, id: recordId });
+                showToast('info', 'Final totals synced to Google Sheets');
+                console.log('[Pro] Final totals synced to Google Sheets:', {
+                    '1g Vials': record.meropenem1gQuantity,
+                    '0.5g Vials': record.meropenem0_5gQuantity,
+                    'Total': record.totalAmount
+                });
             } catch (syncErr) {
                 console.error("Sync failed after discharge", syncErr);
-                showToast('info', 'Patient Discharged (Pending Sync)');
+                showToast('warning', 'Patient discharged (sync pending)');
             }
         } else {
-            showToast('info', 'Patient Discharged (No Internet)');
+            showToast('warning', 'Patient discharged (sync pending)');
         }
 
         renderPatientDetail(recordId);
@@ -886,12 +923,6 @@ function showPage(pageId) {
         }
     });
 
-    // Show/hide FAB
-    const fab = document.getElementById('fab');
-    if (fab) {
-        fab.style.display = (pageId === 'patients' || pageId === 'dashboard') ? 'flex' : 'none';
-    }
-
     // Refresh page-specific content
     if (pageId === 'dashboard') {
         updateDashboard();
@@ -912,7 +943,8 @@ function showToast(type, msg) {
     const icons = {
         success: 'fa-check',
         error: 'fa-times',
-        info: 'fa-info'
+        info: 'fa-info',
+        warning: 'fa-exclamation-triangle'
     };
 
     toast.innerHTML = `
