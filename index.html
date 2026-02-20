@@ -178,7 +178,7 @@
             position: relative;
             z-index: 1;
             min-height: 100vh;
-            padding-bottom: 100px;
+            padding-bottom: 100px; /* Space for bottom nav */
         }
 
         /* ===== HEADER ===== */
@@ -768,51 +768,6 @@
             color: var(--text-secondary);
         }
 
-        /* ===== DAY TRACKER ===== */
-        .day-tracker {
-            display: flex;
-            gap: var(--spacing-sm);
-            overflow-x: auto;
-            padding: var(--spacing-sm);
-            margin: 0 calc(-1 * var(--spacing-md));
-            padding-left: var(--spacing-md);
-        }
-
-        .day-item {
-            flex-shrink: 0;
-            width: 48px;
-            height: 48px;
-            border-radius: var(--radius-md);
-            background: var(--bg-tertiary);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all var(--transition-base);
-        }
-
-        .day-item.current {
-            background: var(--gradient-primary);
-            border-color: transparent;
-            color: white;
-            box-shadow: var(--shadow-glow);
-        }
-
-        .day-item.completed {
-            background: rgba(16, 185, 129, 0.2);
-            border-color: rgba(16, 185, 129, 0.5);
-            color: #10b981;
-        }
-
-        .day-item:hover:not(.current):not(.completed) {
-            background: var(--bg-secondary);
-            border-color: var(--primary);
-        }
-
         /* ===== MODAL ===== */
         .modal-overlay {
             position: fixed;
@@ -1092,32 +1047,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ===== FLOATING ACTION BUTTON ===== */
-        .fab {
-            position: fixed;
-            bottom: 100px;
-            right: var(--spacing-lg);
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: var(--gradient-primary);
-            color: white;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: var(--shadow-glow);
-            transition: all var(--transition-base);
-            z-index: 99;
-        }
-
-        .fab:hover {
-            transform: scale(1.1) rotate(90deg);
-        }
-
-        .fab:active {
-            transform: scale(0.95);
-        }
-
         /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
             .content {
@@ -1134,11 +1063,6 @@
 
             .form-row {
                 grid-template-columns: 1fr;
-            }
-
-            .fab {
-                bottom: 80px;
-                right: var(--spacing-md);
             }
 
             .toast-container {
@@ -1418,8 +1342,8 @@
                         </div>
 
                         <div class="form-group" style="margin-top: var(--spacing-md);">
-                            <label class="form-label">Pharmacist ID (Optional)</label>
-                            <input type="text" id="pharmacistId" class="form-input" placeholder="ID Number">
+                            <label class="form-label required">Pharmacist ID</label>
+                            <input type="text" id="pharmacistId" class="form-input" required placeholder="ID Number">
                         </div>
 
                         <!-- Submit -->
@@ -1510,93 +1434,87 @@
             </div>
         </div>
 
-        <!-- Floating Action Button -->
-        <button class="fab" onclick="showPage('newPatient')" id="fab">
-            <i class="fas fa-plus"></i>
-        </button>
-    </div>
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <div class="nav-container">
+                <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
+                    <div class="nav-icon">
+                        <i class="fas fa-th-large"></i>
+                    </div>
+                    <span class="nav-label">Dashboard</span>
+                </div>
+                <div class="nav-item" onclick="showPage('patients')" data-page="patients">
+                    <div class="nav-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <span class="nav-label">Patients</span>
+                </div>
+                <div class="nav-item" onclick="showPage('newPatient')" data-page="newPatient">
+                    <div class="nav-icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <span class="nav-label">New</span>
+                </div>
+                <div class="nav-item" onclick="showPage('settings')" data-page="settings">
+                    <div class="nav-icon">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                    <span class="nav-label">Settings</span>
+                </div>
+            </div>
+        </nav>
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <div class="nav-container">
-            <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
-                <div class="nav-icon">
-                    <i class="fas fa-th-large"></i>
+        <!-- Daily Update Modal -->
+        <div id="dailyUpdateModal" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <i class="fas fa-calendar-plus"></i>
+                        Daily Update - Day <span id="modalCurrentDay">1</span>
+                    </div>
+                    <button class="modal-close" onclick="closeDailyUpdateModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <span class="nav-label">Dashboard</span>
-            </div>
-            <div class="nav-item" onclick="showPage('patients')" data-page="patients">
-                <div class="nav-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <span class="nav-label">Patients</span>
-            </div>
-            <div class="nav-item" onclick="showPage('newPatient')" data-page="newPatient">
-                <div class="nav-icon">
-                    <i class="fas fa-plus-circle"></i>
-                </div>
-                <span class="nav-label">New</span>
-            </div>
-            <div class="nav-item" onclick="showPage('settings')" data-page="settings">
-                <div class="nav-icon">
-                    <i class="fas fa-cog"></i>
-                </div>
-                <span class="nav-label">Settings</span>
-            </div>
-        </div>
-    </nav>
+                <div class="modal-body">
+                    <div style="text-align: center; margin-bottom: var(--spacing-md);">
+                        <div id="modalPatientName" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);"></div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: var(--spacing-xs);">
+                            Hospital Day: <span class="text-gradient" style="font-weight: 700;">#<span id="modalHospitalDay">1</span></span>
+                        </div>
+                    </div>
 
-    <!-- Daily Update Modal -->
-    <div id="dailyUpdateModal" class="modal-overlay">
-        <div class="modal">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <i class="fas fa-calendar-plus"></i>
-                    Daily Update - Day <span id="modalCurrentDay">1</span>
-                </div>
-                <button class="modal-close" onclick="closeDailyUpdateModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div style="text-align: center; margin-bottom: var(--spacing-md);">
-                    <div id="modalPatientName" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);"></div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: var(--spacing-xs);">
-                        Hospital Day: <span class="text-gradient" style="font-weight: 700;">#<span id="modalHospitalDay">1</span></span>
+                    <div class="form-group">
+                        <label class="form-label required">1g Vials Today</label>
+                        <input type="number" id="updateMeropenem1gQuantity" class="form-input" min="0" placeholder="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label required">0.5g Vials Today</label>
+                        <input type="number" id="updateMeropenem0_5gQuantity" class="form-input" min="0" placeholder="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea id="updateNotes" class="form-textarea" rows="3" placeholder="Any observations or changes..."></textarea>
+                    </div>
+
+                    <div class="card" style="background: var(--gradient-card); margin-top: var(--spacing-md);">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">New Total After Update</div>
+                            <div id="newTotalAfterUpdate" style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">0 g</div>
+                        </div>
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label class="form-label required">1g Vials Today</label>
-                    <input type="number" id="updateMeropenem1gQuantity" class="form-input" min="0" placeholder="0">
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeDailyUpdateModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveDailyUpdate()">
+                        <i class="fas fa-save"></i>
+                        Save Update & Sync to Google Sheets
+                    </button>
                 </div>
-
-                <div class="form-group">
-                    <label class="form-label required">0.5g Vials Today</label>
-                    <input type="number" id="updateMeropenem0_5gQuantity" class="form-input" min="0" placeholder="0">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Notes</label>
-                    <textarea id="updateNotes" class="form-textarea" rows="3" placeholder="Any observations or changes..."></textarea>
-                </div>
-
-                <div class="card" style="background: var(--gradient-card); margin-top: var(--spacing-md);">
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.85rem; color: var(--text-secondary);">New Total After Update</div>
-                        <div id="newTotalAfterUpdate" style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">0 g</div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeDailyUpdateModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveDailyUpdate()">
-                    <i class="fas fa-save"></i>
-                    Save Update
-                </button>
             </div>
         </div>
-    </div>
 
     <script src="app.js" defer></script>
 </body>
