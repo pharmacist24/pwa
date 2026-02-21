@@ -1174,73 +1174,6 @@
         .mb-4 { margin-bottom: var(--spacing-md); }
         .w-full { width: 100%; }
         .hidden { display: none !important; }
-
-        /* ===== METHOD SLIDER ===== */
-        .method-slider {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--spacing-sm);
-            margin-top: var(--spacing-sm);
-        }
-
-        .method-option {
-            background: var(--bg-tertiary);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--radius-md);
-            padding: var(--spacing-md);
-            cursor: pointer;
-            transition: all var(--transition-base);
-            text-align: center;
-        }
-
-        .method-option:hover {
-            background: var(--bg-secondary);
-            border-color: rgba(99, 102, 241, 0.3);
-        }
-
-        .method-option.active {
-            background: var(--gradient-card);
-            border-color: var(--primary);
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-        }
-
-        .method-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: var(--radius-md);
-            background: var(--bg-glass);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto var(--spacing-sm);
-            font-size: 1.1rem;
-            color: var(--text-muted);
-            transition: all var(--transition-base);
-        }
-
-        .method-option.active .method-icon {
-            background: var(--gradient-primary);
-            color: white;
-        }
-
-        .method-name {
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: var(--text-primary);
-            margin-bottom: var(--spacing-xs);
-        }
-
-        .method-desc {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            line-height: 1.3;
-        }
-
-        @media (max-width: 768px) {
-            .method-slider {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 <body>
@@ -1282,8 +1215,8 @@
                     <button class="header-btn" onclick="syncAllRecords()" title="Sync Discharged Patients">
                         <i class="fas fa-sync-alt"></i>
                     </button>
-                    <button class="header-btn" onclick="showPage('settings')" title="eGFR Calculator">
-                        <i class="fas fa-kidneys"></i>
+                    <button class="header-btn" onclick="showPage('settings')" title="Settings">
+                        <i class="fas fa-cog"></i>
                     </button>
                 </div>
             </div>
@@ -1546,29 +1479,6 @@
                         </div>
                     </div>
 
-                    <!-- Method Slider -->
-                    <div class="form-group" style="margin-bottom: var(--spacing-lg);">
-                        <label class="form-label required">Calculation Method</label>
-                        <div class="method-slider" id="methodSlider">
-                            <div class="method-option active" data-method="ckdepi" onclick="selectMethod('ckdepi')">
-                                <div class="method-icon"><i class="fas fa-flask"></i></div>
-                                <div class="method-name">CKD-EPI</div>
-                                <div class="method-desc">Most accurate for most patients</div>
-                            </div>
-                            <div class="method-option" data-method="mDRD" onclick="selectMethod('mDRD')">
-                                <div class="method-icon"><i class="fas fa-chart-line"></i></div>
-                                <div class="method-name">MDRD</div>
-                                <div class="method-desc">Widely used clinical formula</div>
-                            </div>
-                            <div class="method-option" data-method="cockcroft" onclick="selectMethod('cockcroft')">
-                                <div class="method-icon"><i class="fas fa-balance-scale"></i></div>
-                                <div class="method-name">Cockcroft-Gault</div>
-                                <div class="method-desc">For drug dosing adjustments</div>
-                            </div>
-                        </div>
-                        <input type="hidden" id="eGFR_Method" value="ckdepi">
-                    </div>
-
                     <div class="form-group">
                         <label class="form-label required">Serum Creatinine (mg/dL)</label>
                         <input type="number" id="eGFR_Creatinine" class="form-input" required step="0.01" min="0.1" placeholder="e.g. 1.2">
@@ -1588,7 +1498,7 @@
                         </select>
                     </div>
 
-                    <div class="form-group" id="raceField">
+                    <div class="form-group">
                         <label class="form-label required">Race</label>
                         <select id="eGFR_Race" class="form-select" required>
                             <option value="">Select Race</option>
@@ -1598,14 +1508,6 @@
                             <option value="hispanic">Hispanic/Latino</option>
                             <option value="other">Other</option>
                         </select>
-                    </div>
-
-                    <div class="form-group" id="weightField" style="display: none;">
-                        <label class="form-label required">Weight (kg)</label>
-                        <input type="number" id="eGFR_Weight" class="form-input" required step="0.1" min="1" max="300" placeholder="e.g. 70">
-                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--spacing-xs);">
-                            <i class="fas fa-info-circle"></i> Required for Cockcroft-Gault formula
-                        </div>
                     </div>
 
                     <button class="btn btn-primary btn-full" onclick="calculateEGFR()">
@@ -1631,7 +1533,7 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-info-circle"></i>
-                            eGFR Categories (CKD Stages)
+                            eGFR Categories (CKD-EPI)
                         </div>
                     </div>
                     <div style="display: grid; gap: var(--spacing-sm);">
@@ -1675,35 +1577,6 @@
                             <div>
                                 <div style="font-weight: 600;">< 15</div>
                                 <div style="font-size: 0.8rem; color: var(--text-muted);">Kidney failure</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-graduation-cap"></i>
-                            Calculation Methods Explained
-                        </div>
-                    </div>
-                    <div style="display: grid; gap: var(--spacing-md);">
-                        <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border-left: 3px solid var(--primary);">
-                            <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">CKD-EPI (Recommended)</div>
-                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                Most accurate for estimating GFR in adults. Preferred by KDIGO for CKD staging.
-                            </div>
-                        </div>
-                        <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border-left: 3px solid var(--secondary);">
-                            <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">MDRD</div>
-                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                Widely used clinical formula. May underestimate GFR in healthy individuals.
-                            </div>
-                        </div>
-                        <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border-left: 3px solid var(--success);">
-                            <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">Cockcroft-Gault</div>
-                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                Estimates creatinine clearance. Used for drug dosing adjustments (e.g., antibiotics).
                             </div>
                         </div>
                     </div>
